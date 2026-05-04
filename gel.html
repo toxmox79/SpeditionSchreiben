@@ -28,6 +28,64 @@
       { name: '--bg-darker', label: 'Hintergrund (Dunkel)', type: 'color' }
     ];
 
+    const GEL_CSV_DEFAULT_CUSTOMER_NUMBER = "10319"; // GEL CSV Spalte 1 / AUFNR
+    const GEL_PREVIOUS_DEFAULT_CUSTOMER_NUMBER = "48004";
+    const GEL_IMPORT_SETTINGS_VERSION = 2;
+
+    const defaultGelImportSettings = {
+      customerNumber: GEL_CSV_DEFAULT_CUSTOMER_NUMBER,
+      settingsVersion: GEL_IMPORT_SETTINGS_VERSION
+    };
+
+    let gelImportSettings = loadGelImportSettings();
+
+    function normalizeGelCustomerNumber(value) {
+      const customerNumber = String(value ?? "").trim();
+      return customerNumber || defaultGelImportSettings.customerNumber;
+    }
+
+    function loadGelImportSettings() {
+      try {
+        const saved = JSON.parse(localStorage.getItem('gelImportSettings') || '{}') || {};
+        const savedCustomerNumber = normalizeGelCustomerNumber(saved.customerNumber);
+        const customerNumber = (
+          saved.settingsVersion !== GEL_IMPORT_SETTINGS_VERSION &&
+          savedCustomerNumber === GEL_PREVIOUS_DEFAULT_CUSTOMER_NUMBER
+        ) ? defaultGelImportSettings.customerNumber : savedCustomerNumber;
+
+        return {
+          ...defaultGelImportSettings,
+          ...saved,
+          customerNumber,
+          settingsVersion: GEL_IMPORT_SETTINGS_VERSION
+        };
+      } catch (error) {
+        return { ...defaultGelImportSettings };
+      }
+    }
+
+    function saveGelImportSettings() {
+      localStorage.setItem('gelImportSettings', JSON.stringify(gelImportSettings));
+    }
+
+    function renderGelImportSettings() {
+      const customerNumber = document.getElementById('gelCustomerNumber');
+      if (customerNumber) customerNumber.value = gelImportSettings.customerNumber;
+    }
+
+    window.updateGelImportSetting = function (key, value) {
+      if (key === 'customerNumber') {
+        gelImportSettings.customerNumber = normalizeGelCustomerNumber(value);
+      }
+
+      saveGelImportSettings();
+      renderGelImportSettings();
+    }
+
+    window.getGelCustomerNumber = function () {
+      return normalizeGelCustomerNumber(gelImportSettings.customerNumber);
+    }
+
     // --- Theme Presets ---
     const presetDefinitions = [
       { name: "Geis Dark", colors: { "--bg-color": "#121212", "--card-bg": "#1e1e1e", "--text-color": "#e0e0e0", "--accent": "#4ade80", "--btn-green": "#16a34a", "--btn-blue": "#3b82f6", "--btn-red": "#ef4444", "--btn-secondary": "#6b7280", "--highlight": "#fbbf24", "--border": "#333333", "--bg-darker": "#181a1b" } },
@@ -184,6 +242,7 @@
       document.getElementById('modalOverlay').style.display = 'block';
       document.getElementById('settingsModal').style.display = 'block';
       renderSettings();
+      renderGelImportSettings();
       renderPresets();
     }
 
@@ -856,6 +915,31 @@
       font-weight: 500;
     }
 
+    .settings-field {
+      display: grid;
+      grid-template-columns: minmax(160px, 1fr) minmax(180px, 260px);
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+      padding: 8px 5px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .settings-field label {
+      font-weight: 500;
+    }
+
+    .settings-field input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 9px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.2);
+      color: var(--text-color);
+      font: inherit;
+    }
+
     .preset-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
@@ -1520,6 +1604,13 @@
       <!-- Options injected by JS -->
     </div>
 
+    <h3>GEL Import</h3>
+    <div class="settings-field">
+      <label for="gelCustomerNumber">Kundennummer</label>
+      <input id="gelCustomerNumber" type="text" inputmode="numeric" autocomplete="off" placeholder="10319"
+        onchange="updateGelImportSetting('customerNumber', this.value)">
+    </div>
+
     <div style="display:flex; justify-content:space-between; margin-top:20px;">
       <button class="close-modal" onclick="closeSettings()" style="width:48%">Schließen</button>
       <button class="close-modal" onclick="resetTheme()"
@@ -1651,6 +1742,7 @@
     }
 
     const fixed = {
+      AUFNR: GEL_CSV_DEFAULT_CUSTOMER_NUMBER,
       AVKZ: "N",
       VNAME: "AruH Vertriebs GmbH",
       VLAND: "D",
@@ -47987,6 +48079,7 @@
         }
       }
       const dateStr = formatDateDDMMYYYY(pickupDate);
+      const gelCustomerNumber = window.getGelCustomerNumber ? window.getGelCustomerNumber() : fixed.AUFNR;
 
       data.forEach(item => {
         const podkzValue = (item.swap ? "AS" : "A") + "V";
@@ -47999,7 +48092,7 @@
         }
 
         const row = [
-          "48004",                                  // 0 AUFNR
+          gelCustomerNumber,                        // 0 AUFNR
           fixed.AVKZ,                               // 1 AVKZ
           fixed.VNAME,                              // 2 VNAME
           "",                                       // 3
