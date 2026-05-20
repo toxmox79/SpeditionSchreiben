@@ -1648,6 +1648,7 @@
                 <th>Tarif</th>
                 <th>Warenwert</th>
                 <th>Swap</th>
+                <th>Swap2Mann</th>
                 <th>Löschen</th>
               </tr>
             </thead>
@@ -47689,6 +47690,7 @@
             isPalletized,
             herdset: isHerdset,
             swap: false,
+            swap2Mann: false,
             overweight
           });
         }
@@ -47863,6 +47865,9 @@
           <td class="checkbox-cell">
             <input type="checkbox" ${item.swap ? "checked" : ""} onchange="toggleSwap(${idx})">
           </td>
+          <td class="checkbox-cell">
+            <input type="checkbox" ${item.swap2Mann ? "checked" : ""} onchange="toggleSwap2Mann(${idx})">
+          </td>
           <td style="text-align:center;">
             <button class="delete-btn" onclick="deleteRow(${idx})">✕</button>
           </td>
@@ -48030,8 +48035,21 @@
       reCalculate(idx);
     };
 
+    function getSelectedTarifChoice(item) {
+      if (item.forceTarif === "P2" || item.forceTarif === "2") return item.forceTarif;
+      return item.isPalletized ? "P2" : "2";
+    }
+
+    function getExportTarifCode(item) {
+      return (item.forceTarif === "P2" || item.forceTarif === "2") ? item.forceTarif : item.tarif;
+    }
+
     window.toggleSwap = idx => {
       data[idx].swap = !data[idx].swap;
+    };
+
+    window.toggleSwap2Mann = idx => {
+      data[idx].swap2Mann = !data[idx].swap2Mann;
     };
 
     window.deleteRow = idx => {
@@ -48082,7 +48100,15 @@
       const gelCustomerNumber = window.getGelCustomerNumber ? window.getGelCustomerNumber() : fixed.AUFNR;
 
       data.forEach(item => {
-        const podkzValue = (item.swap ? "AS" : "A") + "V";
+        const selectedTarifChoice = getSelectedTarifChoice(item);
+        const exportTarifCode = getExportTarifCode(item);
+        const column19Value = item.swap2Mann
+          ? (selectedTarifChoice === "P2" ? "DP" : "DO")
+          : exportTarifCode;
+        const podkzValue = item.swap2Mann ? "ASVX" : ((item.swap ? "AS" : "A") + "V");
+        const column35Value = item.swap2Mann ? item.telefon : item.email;
+        const wgColumn38Value = item.swap2Mann ? "0" : "21";
+        const swap2MannColumn39Value = item.swap2Mann ? "1" : "";
 
         let infoText;
         if (item.herdset) {
@@ -48110,8 +48136,8 @@
           item.ort,                                 // 15 EORT
           item.anzahl || "1",                       // 16 COLLIANZAHL
           "",                                       // 17
-          ((item.forceTarif === "P2" || item.forceTarif === "2") ? item.forceTarif : item.tarif),                               // 18 ANZAHL (Tarifcode intern)
-          podkzValue,                               // 19 PODKZ
+          column19Value,                            // 18 / Spalte 19
+          podkzValue,                               // 19 / Spalte 20 PODKZ
           "",                                       // 20
           "",                                       // 21
           "",                                       // 22
@@ -48122,11 +48148,11 @@
           item.telefon,                             // 27 AB Rufnummer
           (item.priceGrossCents || "0"),            // 28 AC VALWERT (Warenwert in Cent)
           "", "", "", "", "",                       // 29–33
-          item.email,                               // 34 IODEMAIL
+          column35Value,                            // 34 / Spalte 35 IODEMAIL
           "",                                       // 35
           Array(parseInt(item.anzahl || "1", 10)).fill(`|${item.weight}|${item.length}|${item.width}|${item.height}`).join("|"), // 36 MASSE
-          "21",                                     // 37 WG
-          "",                                       // 38
+          wgColumn38Value,                         // 37 / Spalte 38 WG
+          swap2MannColumn39Value,                   // 38 / Spalte 39 Swap2Mann-Kennzeichen
           "",                                       // 39
           item.email,                               // 40
           ""                                        // 41
