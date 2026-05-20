@@ -30,10 +30,11 @@
 
     const GEL_CSV_DEFAULT_CUSTOMER_NUMBER = "10319"; // GEL CSV Spalte 1 / AUFNR
     const GEL_PREVIOUS_DEFAULT_CUSTOMER_NUMBER = "48004";
-    const GEL_IMPORT_SETTINGS_VERSION = 2;
+    const GEL_IMPORT_SETTINGS_VERSION = 3;
 
     const defaultGelImportSettings = {
       customerNumber: GEL_CSV_DEFAULT_CUSTOMER_NUMBER,
+      insuranceSurchargeCents: 5000,
       settingsVersion: GEL_IMPORT_SETTINGS_VERSION
     };
 
@@ -42,6 +43,19 @@
     function normalizeGelCustomerNumber(value) {
       const customerNumber = String(value ?? "").trim();
       return customerNumber || defaultGelImportSettings.customerNumber;
+    }
+
+    function parseGelEuroToCents(value) {
+      let text = String(value ?? "").trim();
+      if (!text) return 0;
+      text = text.replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
+      const num = parseFloat(text);
+      return Number.isFinite(num) ? Math.max(0, Math.round(num * 100)) : 0;
+    }
+
+    function formatGelCentsToEuro(cents) {
+      const safeCents = parseInt(cents || "0", 10) || 0;
+      return (safeCents / 100).toFixed(2).replace(".", ",");
     }
 
     function loadGelImportSettings() {
@@ -57,6 +71,9 @@
           ...defaultGelImportSettings,
           ...saved,
           customerNumber,
+          insuranceSurchargeCents: Number.isFinite(parseInt(saved.insuranceSurchargeCents, 10))
+            ? Math.max(0, parseInt(saved.insuranceSurchargeCents, 10))
+            : defaultGelImportSettings.insuranceSurchargeCents,
           settingsVersion: GEL_IMPORT_SETTINGS_VERSION
         };
       } catch (error) {
@@ -70,12 +87,16 @@
 
     function renderGelImportSettings() {
       const customerNumber = document.getElementById('gelCustomerNumber');
+      const insuranceSurcharge = document.getElementById('gelInsuranceSurcharge');
       if (customerNumber) customerNumber.value = gelImportSettings.customerNumber;
+      if (insuranceSurcharge) insuranceSurcharge.value = formatGelCentsToEuro(gelImportSettings.insuranceSurchargeCents);
     }
 
     window.updateGelImportSetting = function (key, value) {
       if (key === 'customerNumber') {
         gelImportSettings.customerNumber = normalizeGelCustomerNumber(value);
+      } else if (key === 'insuranceSurchargeCents') {
+        gelImportSettings.insuranceSurchargeCents = parseGelEuroToCents(value);
       }
 
       saveGelImportSettings();
@@ -84,6 +105,10 @@
 
     window.getGelCustomerNumber = function () {
       return normalizeGelCustomerNumber(gelImportSettings.customerNumber);
+    }
+
+    window.getGelInsuranceSurchargeCents = function () {
+      return Math.max(0, parseInt(gelImportSettings.insuranceSurchargeCents || 0, 10) || 0);
     }
 
     // --- Theme Presets ---
@@ -267,6 +292,20 @@
       if (overlay) overlay.onclick = closeSettings;
     });
 
+    window.showGelTab = function (id) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+
+      const tab = document.getElementById('tab-' + id);
+      const btn = document.querySelector(`.tab-btn[data-tab="${id}"]`);
+      if (tab) tab.classList.add('active');
+      if (btn) btn.classList.add('active');
+
+      if (id === 'pdf' && typeof renderGelPdfLabels === 'function') {
+        renderGelPdfLabels();
+      }
+    }
+
     // Call init on load
     initTheme();
 
@@ -323,43 +362,43 @@
 
     body {
       font-family: var(--font-main);
-      background: var(--bg-color);
+      background: var(--card-bg);
       color: var(--text-main);
       margin: 0;
       padding: 20px;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      align-items: center;
+      align-items: stretch;
     }
 
     .container {
       width: 100%;
-      max-width: 1600px;
+      max-width: none;
       margin: 0 auto;
     }
 
     .card {
-      background: var(--card-bg);
-      border-radius: 16px;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
-      /* Stronger shadow */
-      padding: 30px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      margin-bottom: 30px;
+      background: transparent;
+      border-radius: 0;
+      box-shadow: none;
+      padding: 20px 0 0;
+      border: 0;
+      margin-bottom: 0;
       position: relative;
+      width: 100%;
     }
 
     /* Decoration top border */
     .card::before {
-      content: "";
+      content: none;
       position: absolute;
       top: 0;
       left: 0;
       right: 0;
       height: 4px;
       background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
-      border-radius: 16px 16px 0 0;
+      border-radius: 12px 12px 0 0;
     }
 
     h1 {
@@ -372,6 +411,59 @@
       text-transform: uppercase;
     }
 
+    .tool-title {
+      margin-bottom: 20px;
+    }
+
+    .tab-nav {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      width: fit-content;
+      max-width: 100%;
+      margin: 0 auto 30px auto;
+      padding: 10px;
+      background: rgba(0, 0, 0, 0.18);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: 2px solid transparent;
+      color: var(--text-muted);
+      padding: 10px 20px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 1.05rem;
+      font-weight: 800;
+      border-radius: 8px;
+      transition: all 0.2s ease;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-main);
+      background: var(--bg-hover);
+    }
+
+    .tab-btn.active {
+      background: var(--accent-primary);
+      color: #fff;
+      border-color: var(--accent-primary);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+    }
+
+    .tab-content {
+      display: none;
+      width: 100%;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
     p.subtitle {
       text-align: center;
       margin: 0 0 40px 0;
@@ -381,15 +473,15 @@
 
     /* DROP ZONE */
     #drop {
-      border: 2px dashed #cbd5e1;
+      border: 2px dashed rgba(255, 255, 255, 0.35);
       border-radius: 12px;
       width: 100%;
-      max-width: 600px;
-      margin: 0 auto;
+      max-width: none;
+      margin: 0;
       padding: 60px 40px;
       text-align: center;
-      background: #f8fafc;
-      color: var(--text-muted);
+      background: rgba(0, 0, 0, 0.18);
+      color: var(--text-main);
       cursor: pointer;
       transition: all 0.3s ease;
       display: flex;
@@ -399,7 +491,7 @@
     }
 
     #drop:hover {
-      background: #eff6ff;
+      background: rgba(255, 255, 255, 0.08);
       border-color: var(--accent-primary);
       color: var(--accent-primary);
       transform: translateY(-2px);
@@ -407,8 +499,7 @@
 
     #drop.dragover {
       border-color: var(--accent-secondary);
-      background: #fff7ed;
-      /* Light orange tint */
+      background: rgba(255, 255, 255, 0.08);
       color: var(--accent-secondary);
     }
 
@@ -470,6 +561,7 @@
     .table-wrapper {
       border-radius: 8px;
       overflow-x: auto;
+      overflow-y: visible;
       border: 1px solid rgba(255, 255, 255, 0.1);
       background: rgba(0, 0, 0, 0.2);
       /* Darker backdrop for table */
@@ -713,8 +805,30 @@
     }
 
     @media (max-width: 900px) {
+      body {
+        padding: 12px;
+      }
+
       .container {
-        padding: 20px;
+        padding: 0;
+      }
+
+      .card {
+        padding: 16px 0 0;
+      }
+
+      .tab-nav {
+        width: 100%;
+        flex-wrap: wrap;
+      }
+
+      .tab-btn {
+        flex: 1 1 180px;
+      }
+
+      #drop,
+      #gelPdfDrop {
+        max-width: none;
       }
 
       th,
@@ -1024,12 +1138,14 @@
 
     /* ===== Geis-like Preview Table Skin (design only) ===== */
     #output {
-      max-width: 1500px;
-      margin: 18px auto 0 auto;
+      max-width: none;
+      width: 100%;
+      margin: 18px 0 0 0;
     }
 
     #output table {
       width: 100%;
+      min-width: 1680px;
       border-collapse: separate;
       border-spacing: 0;
       background: rgba(20, 20, 20, 0.92);
@@ -1037,6 +1153,85 @@
       border-radius: 12px;
       overflow: hidden;
       box-shadow: 0 12px 35px rgba(0, 0, 0, 0.55);
+      table-layout: fixed;
+    }
+
+    #output th:nth-child(1),
+    #output td:nth-child(1) {
+      width: 48px;
+    }
+
+    #output th:nth-child(2),
+    #output td:nth-child(2) {
+      width: 88px;
+    }
+
+    #output th:nth-child(3),
+    #output td:nth-child(3) {
+      width: 180px;
+    }
+
+    #output th:nth-child(4),
+    #output td:nth-child(4) {
+      width: 110px;
+    }
+
+    #output th:nth-child(5),
+    #output td:nth-child(5) {
+      width: 190px;
+    }
+
+    #output th:nth-child(6),
+    #output td:nth-child(6) {
+      width: 160px;
+    }
+
+    #output th:nth-child(7),
+    #output td:nth-child(7) {
+      width: 180px;
+    }
+
+    #output th:nth-child(8),
+    #output td:nth-child(8) {
+      width: 80px;
+    }
+
+    #output th:nth-child(9),
+    #output td:nth-child(9) {
+      width: 110px;
+    }
+
+    #output th:nth-child(10),
+    #output td:nth-child(10) {
+      width: 145px;
+    }
+
+    #output th:nth-child(11),
+    #output td:nth-child(11) {
+      width: 100px;
+    }
+
+    #output th:nth-child(12),
+    #output td:nth-child(12) {
+      width: 115px;
+    }
+
+    #output th:nth-child(13),
+    #output td:nth-child(13) {
+      width: 80px;
+      text-align: center;
+    }
+
+    #output th:nth-child(14),
+    #output td:nth-child(14) {
+      width: 110px;
+      text-align: center;
+    }
+
+    #output th:nth-child(15),
+    #output td:nth-child(15) {
+      width: 80px;
+      text-align: center;
     }
 
     #output thead th {
@@ -1054,7 +1249,7 @@
     }
 
     #output tbody td {
-      padding: 10px 12px;
+      padding: 10px 8px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
       color: rgba(240, 240, 240, 0.92);
       font-size: 13px;
@@ -1133,6 +1328,8 @@
     #output input[type="text"],
     #output input[type="number"] {
       width: 100%;
+      max-width: 100%;
+      min-width: 0;
       padding: 6px 8px;
       border-radius: 8px;
       border: 1px solid rgba(255, 255, 255, 0.14);
@@ -1178,16 +1375,26 @@
 
     #output th:nth-child(10),
     #output td:nth-child(10) {
-      width: 190px;
+      width: 145px;
     }
 
     #output th:nth-child(11),
     #output td:nth-child(11) {
-      width: 140px;
+      width: 100px;
     }
 
     #output td:nth-child(10) .edit-input {
-      width: 100%;
+      width: 100% !important;
+      box-sizing: border-box;
+    }
+
+    #output td:nth-child(3) .edit-input,
+    #output td:nth-child(4) .edit-input,
+    #output td:nth-child(5) .edit-input,
+    #output td:nth-child(6) .edit-input,
+    #output td:nth-child(9) .edit-input {
+      width: 100% !important;
+      max-width: 100% !important;
       box-sizing: border-box;
     }
 
@@ -1295,15 +1502,15 @@
     }
 
     .pdf-tool {
-      margin-top: 24px;
+      margin-top: 0;
     }
 
     #gelPdfDrop {
       border: 2px dashed rgba(255, 255, 255, 0.35);
       border-radius: 12px;
       width: 100%;
-      max-width: 600px;
-      margin: 0 auto;
+      max-width: none;
+      margin: 0;
       padding: 44px 32px;
       text-align: center;
       background: rgba(0, 0, 0, 0.18);
@@ -1356,6 +1563,18 @@
       width: auto;
       margin: 0;
       padding: 10px 16px;
+    }
+
+    .gel-pdf-actions .main-btn {
+      background: var(--bg-color);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(249, 115, 22, 0.34);
+    }
+
+    .gel-pdf-actions .main-btn:hover {
+      background: var(--bg-color);
+      filter: brightness(0.95);
+      box-shadow: 0 6px 16px rgba(249, 115, 22, 0.44);
     }
 
     .gel-labels-grid {
@@ -1610,6 +1829,11 @@
       <input id="gelCustomerNumber" type="text" inputmode="numeric" autocomplete="off" placeholder="10319"
         onchange="updateGelImportSetting('customerNumber', this.value)">
     </div>
+    <div class="settings-field">
+      <label for="gelInsuranceSurcharge">Warenwert-Aufschlag (€)</label>
+      <input id="gelInsuranceSurcharge" type="text" inputmode="decimal" autocomplete="off" placeholder="50,00"
+        onchange="updateGelImportSetting('insuranceSurchargeCents', this.value)">
+    </div>
 
     <div style="display:flex; justify-content:space-between; margin-top:20px;">
       <button class="close-modal" onclick="closeSettings()" style="width:48%">Schließen</button>
@@ -1618,8 +1842,16 @@
     </div>
   </div>
 
+  <h1 class="tool-title">GEL Portal Toolkit</h1>
+
+  <div class="tab-nav">
+    <button class="tab-btn active" data-tab="import" onclick="showGelTab('import')">GEL Import</button>
+    <button class="tab-btn" data-tab="pdf" onclick="showGelTab('pdf')">PDF Drucker</button>
+  </div>
+
   <div class="container">
-    <div class="card">
+    <div id="tab-import" class="tab-content active">
+      <div class="card">
       <h1>GEL Portal Tool</h1>
       <p class="subtitle">CSV/Excel-Datei hier ziehen oder klicken, um den Versandimport für GEL zu erzeugen.</p>
 
@@ -1670,8 +1902,10 @@
           herunterladen</button>
       </div>
     </div>
+    </div>
 
-    <div class="card pdf-tool">
+    <div id="tab-pdf" class="tab-content">
+      <div class="card pdf-tool">
       <h1>GEL Etiketten PDF</h1>
       <p class="subtitle">PDF hochladen, Etiketten prüfen und mit laufender Nummer unten rechts drucken.</p>
 
@@ -1719,6 +1953,7 @@
       </div>
 
       <div id="gelPrintArea"></div>
+    </div>
     </div>
   </div>
 
@@ -47633,7 +47868,7 @@
           let priceGrossStr = String(row[50] || "0").trim();
           priceGrossStr = priceGrossStr.replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
           const priceGrossNum = parseFloat(priceGrossStr) || 0;
-          const priceGrossCents = String(Math.round(priceGrossNum * 100));
+          const priceGrossCents = String(Math.round(priceGrossNum * 100) + (window.getGelInsuranceSurchargeCents ? window.getGelInsuranceSurchargeCents() : 5000));
 
           let optDims = calculateOptimalDimensions(weightRounded, lengthCM, widthCM, heightCM);
           let tariffResult = calculateTariff(weightRounded, optDims.length, optDims.width, optDims.height, null);
