@@ -47412,9 +47412,28 @@
       };
     }
 
+    function usesGelUpTo59KgTariff2Rule(weight, h) {
+      const weightKg = Number(weight) || 0;
+      const heightCm = Number(h) || 0;
+      return weightKg > 0 && weightKg <= 59 && heightCm > 0 && heightCm <= 150;
+    }
+
     function calculateTariff(weight, l, w, h, forcePalletized = null) {
       const volumeWeight = calculateVolumeWeight(l, w, h);
       const effectiveWeight = Math.max(weight, volumeWeight);
+
+      // GEL-Sonderregel: bis 59 kg bei maximal 150 cm Höhe immer Tarif 2 (unpalettiert).
+      // Eine ausdrücklich manuell gewählte P2-Einstellung hat weiterhin Vorrang.
+      if (usesGelUpTo59KgTariff2Rule(weight, h) && forcePalletized !== true) {
+        return {
+          tarif: "2",
+          isPalletized: false,
+          palletPreference: null,
+          effectiveWeight,
+          info: "Unpalettiert – Sonderregel bis 59 kg / Höhe bis 150 cm",
+          maxWeight: 60
+        };
+      }
 
       let bestTariffCode = "2";
       let isPalletized = false;
@@ -47472,6 +47491,7 @@
     }
 
     function isOverweight(weight, l, w, h) {
+      if (usesGelUpTo59KgTariff2Rule(weight, h)) return false;
       const volumeWeight = calculateVolumeWeight(l, w, h);
       const eff = Math.max(weight, volumeWeight);
       return eff > 101;
@@ -47821,6 +47841,9 @@
           // OrderItem.orderItemName (Spalte 49)
           const itemNameRaw = row[49] ? String(row[49]) : "";
           if (itemNameRaw.toLowerCase().includes("versandkosten")) continue;
+          // Bundle-Bestandteile werden von Plenty mit "[-]" markiert.
+          // In der GEL-Tabelle erscheint nur der zugehörige [BUNDLE]-Hauptartikel.
+          if (/^\s*\[-\]/.test(itemNameRaw)) continue;
 
           const isHerdset = /herd\s*set/i.test(itemNameRaw) || /herdset/i.test(itemNameRaw);
           // Anzeige ohne führende Zahl
@@ -47860,8 +47883,8 @@
           const email = row[42] ? String(row[42]) : "";
 
           // Stückzahl / Colli-Anzahl
-          const gelColli = row[20] ? parseInt(String(row[20]).trim()) : 1;
-          const orderItemQty = row[48] ? parseInt(String(row[48]).trim()) : 1;
+          const gelColli = row[20] ? (parseInt(String(row[20]).trim(), 10) || 1) : 1;
+          const orderItemQty = row[48] ? (parseInt(String(row[48]).trim(), 10) || 1) : 1;
           const anzahl = String(Math.max(gelColli, orderItemQty));
 
           // Gewicht parsen, dann runden
@@ -47879,7 +47902,8 @@
           let priceGrossStr = String(row[50] || "0").trim();
           priceGrossStr = priceGrossStr.replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
           const priceGrossNum = parseFloat(priceGrossStr) || 0;
-          const priceGrossCents = String(Math.round(priceGrossNum * 100) + (window.getGelInsuranceSurchargeCents ? window.getGelInsuranceSurchargeCents() : GEL_DEFAULT_INSURANCE_SURCHARGE_CENTS));
+          const insuranceSurchargeCents = window.getGelInsuranceSurchargeCents ? window.getGelInsuranceSurchargeCents() : GEL_DEFAULT_INSURANCE_SURCHARGE_CENTS;
+          const priceGrossCents = String((Math.round(priceGrossNum * 100) + insuranceSurchargeCents) * orderItemQty);
 
           let optDims = calculateOptimalDimensions(weightRounded, lengthCM, widthCM, heightCM);
           let tariffResult = calculateTariff(weightRounded, optDims.length, optDims.width, optDims.height, null);
@@ -48013,7 +48037,7 @@
 
       data.forEach((item, idx) => {
         const tr = document.createElement("tr");
-        const weightWarning = item.overweight ? "weight-warning" : "";
+        const weightWarning = item.overweight && getSelectedTarifChoice(item) !== "P2" ? "weight-warning" : "";
 
         // Duplicate Check
         const addrKey = (item.adresse || "").trim().toLowerCase();
