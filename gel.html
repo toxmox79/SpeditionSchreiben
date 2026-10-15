@@ -47917,10 +47917,15 @@
           let finalWidth = parseFloat(optDims.width);
           let finalHeight = parseFloat(optDims.height);
 
-          // Palettiert bis 101 kg → immer 80 x 60
-          if (isPalletized && effectiveWeight <= 101) {
-            finalLength = 80;
-            finalWidth = 60;
+          // Palettiert (P2) → Länge < 90 cm: 80 x 60, sonst 120 x 80 (Höhe bleibt)
+          if (isPalletized) {
+            if (finalLength < 90) {
+              finalLength = 80;
+              finalWidth = 60;
+            } else {
+              finalLength = 120;
+              finalWidth = 80;
+            }
           }
 
           const overweight = isOverweight(weightRounded, finalLength, finalWidth, finalHeight);
@@ -48116,9 +48121,10 @@
               onchange="updateWeight(${idx}, this.value)"> kg
           </td>
           <td class="${weightWarning}">
-            <input type="text" value="${item.baseLength ?? item.length} × ${item.baseWidth ?? item.width} × ${item.baseHeight ?? item.height}" class="edit-input"
+            <input type="text" value="${item.length} × ${item.width} × ${item.height}" title="Basis: ${item.baseLength ?? item.length} × ${item.baseWidth ?? item.width} × ${item.baseHeight ?? item.height}" class="edit-input"
               style="width:150px;"
               onchange="updateDimensions(${idx}, this.value)">
+            ${item.isPalletized ? '<div style="font-size:0.7rem;opacity:0.65;margin-top:2px">Basis ' + (item.baseLength ?? item.length) + ' × ' + (item.baseWidth ?? item.width) + ' × ' + (item.baseHeight ?? item.height) + '</div>' : ''}
           </td>
           <td class="tarif-cell ${item.isPalletized ? "tarif-pallet" : "tarif-unpallet"}">
             <div class="tarif-wrap">
@@ -48186,10 +48192,15 @@
       let finalWidth = parseFloat(optDims.width);
       let finalHeight = parseFloat(optDims.height);
 
-      // Palettiert bis 101 kg → immer 80 x 60 (nur Anzeige/Export)
-      if (isPalletized && effectiveWeight <= 101) {
-        finalLength = 80;
-        finalWidth = 60;
+      // Palettiert (P2) → Länge < 90 cm: 80 x 60, sonst 120 x 80 (Höhe bleibt, nur Anzeige/Export)
+      if (isPalletized) {
+        if (finalLength < 90) {
+          finalLength = 80;
+          finalWidth = 60;
+        } else {
+          finalLength = 120;
+          finalWidth = 80;
+        }
       }
 
       const overweight = isOverweight(weight, finalLength, finalWidth, finalHeight);
